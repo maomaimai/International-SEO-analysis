@@ -1,0 +1,89 @@
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# 1. Set the random seed to ensure reproductivity of results
+# 设置随机种子以保证结果可复现
+np.random.seed(42)
+num_rows = 100000
+
+# 2. Generate basic dimensional data 
+# 生成基础维度数据
+start_date = datetime(2026, 1, 1)
+date_list = [start_date + timedelta(days=int(np.random.randint(0, 180))) for _ in range(num_rows)]
+
+# Simulate multinational regions and languages 
+# 模拟跨国区域与语言
+regions = ['US', 'APAC']
+region_probs = [0.6, 0.4] # 60% of the traffic is in the Americas, and 40% is in the Asia-Pacific region. 60% 流量在美洲，40% 在亚太
+row_regions = np.random.choice(regions, size=num_rows, p=region_probs)
+row_languages = [
+    np.random.choice(['EN']) if r == 'US' else np.random.choice(['EN', 'ZH', 'JP'], p=[0.2, 0.5, 0.3]) 
+    for r in row_regions
+]
+
+# Simulate core SEO metrics 
+# 模拟 SEO 核心指标
+# Clicks = Impressions * CTR
+impressions = np.random.randint(500, 20000, size=num_rows)
+# # Intentionally simulated slightly lower CTR for APAC
+# 故意模拟 APAC 的点击率略低
+ctr_base = np.where(row_regions == 'US', np.random.uniform(0.02, 0.08, size=num_rows), np.random.uniform(0.015, 0.05, size=num_rows))
+clicks = (impressions * ctr_base).astype(int)
+
+# 3.Inject business pain points 注入商业痛点（Data anomalies for analysis）
+# Pain points: Page load time in the APAC region is significatly higher(due to insufficient local server CDN optimization)
+# 痛点：APAC 地区的网页加载速度（Page Load Time）明显高（由于没有做好本地服务器 CDN 优化）
+page_load_time = np.where(
+    row_regions == 'US', 
+    np.random.exponential(scale=1.5, size=num_rows) + 0.5, # about 2s on average 平均 2s 左右
+    np.random.exponential(scale=4.5, size=num_rows) + 1.2  # about 5.7s on average, relatively slow 平均 5.7s 左右，较慢
+)
+
+# Chain reaction caused by the pain points: Coversion Rate(CR) is affected by load speed and language localization
+# 痛点导致的连锁反应：转化率（CR）受加载速度和语言本地化影响
+# The longer the load time, the lower the coversion rate
+# 加载时间越长，转化率越低
+cr_base = np.where(row_regions == 'US', 0.03, 0.015) 
+conversion_rate = cr_base / (page_load_time * 0.5 + 0.5)
+# Random fluctuation
+# 随机波动
+conversion_rate = np.clip(conversion_rate * np.random.uniform(0.7, 1.3, size=num_rows), 0.001, 0.1)
+
+conversions = (clicks * conversion_rate).astype(int)
+
+# Simulate Average Order Value (AOV) and revenue
+# 模拟客单价与营收 (AOV = $85)
+revenue = conversions * np.random.normal(85, 15, size=num_rows)
+revenue = np.where(revenue < 0, 0, np.round(revenue, 2))
+
+# Simulate keyword categorization
+# 模拟关键词分类 (Intent)
+keywords_pool = {
+    'US': ['running shoes online', 'best marathon sneakers', 'affordable athletic footwear', 'discount sports shoes', 'buy gym shoes'],
+    'APAC': ['ランニングシューズ 評価', '跑步鞋推荐2026', 'cross-border sports sneakers', '東京 マラソン 靴', '耐磨网球鞋']
+}
+row_keywords = [np.random.choice(keywords_pool[r]) for r in row_regions]
+
+# 4. Assemble into a DataFrame
+#  组装成 DataFrame
+df = pd.DataFrame({
+    'date': date_list,
+    'region': row_regions,
+    'language': row_languages,
+    'keyword': row_keywords,
+    'impressions': impressions,
+    'clicks': clicks,
+    'page_load_time_sec': np.round(page_load_time, 2),
+    'conversions': conversions,
+    'revenue_usd': revenue
+})
+
+# 5. Intentionally create some missing values to simulate the data cleaning work required by analysts
+#  故意制造一些缺失值（Missing Values），模拟现实中分析师需要清洗数据的工作
+mask = np.random.rand(len(df)) < 0.02
+df.loc[mask, 'revenue_usd'] = np.nan
+
+# 6. Save as CSV file 保存为 CSV 文件
+df.to_csv('cross_border_seo_data.csv', index=False)
+print(f"🎉 成功生成包含 {df.shape[0]} 行的高拟真跨国电商数据集！已保存为 'cross_border_seo_data.csv'")
