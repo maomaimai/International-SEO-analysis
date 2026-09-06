@@ -1,3 +1,5 @@
+import pandas as pd
+import numpy as np
 # Read the generated data
 cleaned_df = pd.read_csv('cross_border_seo_data.csv')
 
